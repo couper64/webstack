@@ -1,0 +1,8 @@
+version: 3
+agent:
+  authtoken: 31Bmo2aW6Fa6C64BbJyAd1Cts1V_4gpp2SW6RysXQP5znBhHV
+endpoints:
+  - name: http
+    url: https://salmon-quiet-terminally.ngrok-free.app
+    upstream:
+      url: http://openresty:80

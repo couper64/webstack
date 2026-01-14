@@ -1,0 +1,4 @@
+.md-logo img {
+    border-radius: 50%;   /* makes it circular */
+    max-height: 50px;     /* adjust size as needed */
+}

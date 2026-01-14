@@ -1,0 +1,142 @@
+volumes:
+  ca_data:              # Stores root CA.
+  cert_openresty1_data: # Stores server certificates.
+  cert_openresty2_data: # Stores server certificates.
+
+services:
+
+  ca:
+    image: alpine:latest
+    command: sh /generate_ca.sh
+    volumes:
+      - ca_data:/ca
+      - ./generate_ca.sh:/generate_ca.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /ca/rootCA.crt"]
+      interval: 5s
+      retries: 10
+      start_period: 2s
+      timeout: 2s
+
+
+  cert_openresty1:
+    image: alpine:latest
+    container_name: cert_openresty1
+    depends_on:
+      ca:
+        condition: service_healthy
+    command: >
+      sh -c "
+        apk add --no-cache openssl &&
+        while [ ! -f /ca/rootCA.crt ]; do
+          echo 'Waiting for CA...';
+          sleep 1;
+        done &&
+        mkdir -p /cert &&
+        if [ ! -f /cert/openresty.crt ]; then
+          echo 'Generating server certificate...';
+          openssl genrsa -out /cert/openresty.key 2048 &&
+          openssl req -new -key /cert/openresty.key -out /cert/openresty.csr -subj '/CN=${SUBJECT_CN}' &&
+          printf 'subjectAltName=${SUBJECT_ALT_NAME},DNS:openresty1' > /tmp/san.cnf &&
+          openssl x509 -req -in /cert/openresty.csr -CA /ca/rootCA.crt -CAkey /ca/rootCA.key -CAcreateserial -out /cert/openresty.crt -days 1095 -sha256 -extfile /tmp/san.cnf &&
+          openssl x509 -in /cert/openresty.crt -text -noout | grep -A 1 'Subject Alternative Name'
+        else
+          echo 'Server cert already exists, skipping generation';
+        fi &&
+        echo 'Certificate is ready, keeping container alive for 10 seconds.' &&
+        sleep 10
+      "
+    volumes:
+      - ca_data:/ca
+      - cert_openresty1_data:/cert
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /cert/openresty.crt"]
+      interval: 5s
+      retries: 10
+      start_period: 2s
+      timeout: 2s
+
+  cert_openresty2:
+    image: alpine:latest
+    container_name: cert_openresty2
+    depends_on:
+      ca:
+        condition: service_healthy
+    command: >
+      sh -c "
+        apk add --no-cache openssl &&
+        while [ ! -f /ca/rootCA.crt ]; do
+          echo 'Waiting for CA...';
+          sleep 1;
+        done &&
+        mkdir -p /cert &&
+        if [ ! -f /cert/openresty.crt ]; then
+          echo 'Generating server certificate...';
+          openssl genrsa -out /cert/openresty.key 2048 &&
+          openssl req -new -key /cert/openresty.key -out /cert/openresty.csr -subj '/CN=${SUBJECT_CN}' &&
+          printf 'subjectAltName=${SUBJECT_ALT_NAME},DNS:openresty2' > /tmp/san.cnf &&
+          openssl x509 -req -in /cert/openresty.csr -CA /ca/rootCA.crt -CAkey /ca/rootCA.key -CAcreateserial -out /cert/openresty.crt -days 1095 -sha256 -extfile /tmp/san.cnf &&
+          openssl x509 -in /cert/openresty.crt -text -noout | grep -A 1 'Subject Alternative Name'
+        else
+          echo 'Server cert already exists, skipping generation';
+        fi &&
+        echo 'Certificate is ready, keeping container alive for 10 seconds.' &&
+        sleep 10
+      "
+    volumes:
+      - ca_data:/ca
+      - cert_openresty2_data:/cert
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /cert/openresty.crt"]
+      interval: 5s
+      retries: 10
+      start_period: 2s
+      timeout: 2s
+
+  openresty1:
+    container_name: openresty1
+    depends_on:
+      cert_openresty1:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: Dockerfile.openresty
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx_openresty1.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./favicon.ico:/usr/local/openresty/nginx/html/favicon.ico:ro
+      - ./lua:/etc/openresty/lua:ro
+      - cert_openresty1_data:/etc/ssl/cert # server cert + key
+      - ca_data:/etc/ssl/ca:ro             # rootCA.crt for trust
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  openresty2:
+    container_name: openresty2
+    depends_on:
+      cert_openresty2:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: Dockerfile.openresty
+    ports:
+      - "81:80"
+      - "444:443"
+    volumes:
+      - ./nginx_openresty2.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./favicon.ico:/usr/local/openresty/nginx/html/favicon.ico:ro
+      - ./lua:/etc/openresty/lua:ro
+      - cert_openresty2_data:/etc/ssl/cert # server cert + key
+      - ca_data:/etc/ssl/ca:ro             # rootCA.crt for trust
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

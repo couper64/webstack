@@ -1,0 +1,4 @@
+.vscode
+*.drawio.bkp
+*.drawio.dtmp
+.env

@@ -1,0 +1,109 @@
+volumes:
+  postgres_data:
+
+services:
+
+  ca:
+    image: alpine:latest
+    restart: on-failure     # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+    command: sh /generate_ca.sh
+    volumes:
+      - ./source/certificate_openssl/ssl/ca:/ca
+      - ./source/certificate_openssl/generate_ca.sh:/generate_ca.sh:ro
+
+  cert_openresty:
+    depends_on:
+      - ca
+    image: alpine:latest
+    restart: on-failure     # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+    command: sh /generate_cert.sh
+    volumes:
+      - ./source/certificate_openssl/ssl/ca:/ca
+      - ./source/certificate_openssl/ssl/cert:/cert
+      - ./source/certificate_openssl/generate_cert.sh:/generate_cert.sh:ro
+    environment:
+      SUBJECT_CN       : ${SUBJECT_CN}
+      SUBJECT_ALT_NAME : ${SUBJECT_ALT_NAME}
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    command: start
+    environment:
+
+      # We need a persistent storage.
+      KC_DB          : postgres
+      KC_DB_URL      : jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      KC_DB_USERNAME : ${POSTGRES_USER}
+      KC_DB_PASSWORD : ${POSTGRES_PASSWORD}
+
+      # Hostname v2 Configuration (Path is now part of the URL).
+      KC_HOSTNAME: https://localhost:9990/iam
+      KC_HOSTNAME_STRICT: "true"
+      
+      # Reverse Proxy and Path Configuration.
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_RELATIVE_PATH: /iam
+      KC_HTTP_ENABLED: "true"
+
+      # Temporary credentials that are used during the setup.
+      KC_BOOTSTRAP_ADMIN_USERNAME : ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD : ${KEYCLOAK_ADMIN_PASSWORD}
+
+      # This is needed to tell Keycloak to run in the "single-instance" mode.
+      KC_CACHE: local
+
+  openresty:
+    depends_on:
+      - cert_openresty
+    build:
+      context: source/proxy_openresty
+      dockerfile: Dockerfile.openresty
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+    ports:
+      - "9990:443"
+    volumes:
+      - ./source/proxy_openresty/lua:/etc/openresty/lua:ro
+      - ./source/proxy_openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./source/proxy_openresty/favicon.ico:/usr/local/openresty/nginx/html/favicon.ico:ro
+      - ./source/certificate_openssl/ssl/ca:/etc/ssl/ca:ro     # rootCA.crt for trust
+      - ./source/certificate_openssl/ssl/cert:/etc/ssl/cert:ro # server cert + key
+    environment:
+      POSTGRES_HOST      : ${POSTGRES_HOST}
+      POSTGRES_PORT      : ${POSTGRES_PORT}
+      POSTGRES_DB        : ${POSTGRES_DB}
+      POSTGRES_USER      : ${POSTGRES_USER}
+      POSTGRES_PASSWORD  : ${POSTGRES_PASSWORD}
+
+      # KeyCloak-related parameters.
+      OIDC_CLIENT_ID       : ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET   : ${OIDC_CLIENT_SECRET}
+      OIDC_ISSUER_PUBLIC   : ${OIDC_ISSUER_PUBLIC}
+      OIDC_ISSUER_INTERNAL : ${OIDC_ISSUER_INTERNAL}
+      OIDC_REDIRECT_URI    : ${OIDC_REDIRECT_URI}
+
+  postgres:
+    image: postgres:latest
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+    environment:
+      POSTGRES_DB       : ${POSTGRES_DB}
+      POSTGRES_USER     : ${POSTGRES_USER}
+      POSTGRES_PASSWORD : ${POSTGRES_PASSWORD}
+    volumes:
+      # - ./source/database_postgres/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+      - postgres_data:/var/lib/postgresql

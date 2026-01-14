@@ -1,0 +1,11 @@
+site_name: Official Documentation
+use_directory_urls: true
+theme:
+  name: material
+  favicon: 'image/favicon.ico'
+  logo: 'image/logo.jpg'
+nav:
+  - Home: index.md
+  - About: about.md
+extra_css:
+  - css/custom.css

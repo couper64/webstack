@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "classifier"
+version = "1.0.0"
+description = "A basic PyTorch-based classifier package for FashionMNIST dataset."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Vladislav Li", email = "couper64@gmail.com" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "torch",
+    "torchvision",
+    "numpy",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/classifier"
+Repository = "https://github.com/yourusername/classifier"
+
+[tool.setuptools.packages.find]
+where = ["classifier"]

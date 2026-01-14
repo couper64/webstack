@@ -1,0 +1,13 @@
+#!/usr/bin/env pwsh
+
+Write-Host "Stopping and removing containers..."
+docker compose -f ./service/docker-compose.yml down --volumes --remove-orphans
+
+Write-Host "Removing SSL folders..."
+Remove-Item -Recurse -Force "service/source/certificate_openssl/ssl/ca" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "service/source/certificate_openssl/ssl/cert" -ErrorAction SilentlyContinue
+
+Write-Host "Removing .env..."
+Remove-Item -Force "service/.env" -ErrorAction SilentlyContinue
+
+Write-Host "Done! Everything is uninstalled."

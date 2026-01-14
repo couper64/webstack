@@ -1,0 +1,17 @@
+celery[redis]
+redis
+minio
+psycopg
+flower
+codecarbon
+
+# Add the dependency Python packages required by tasks below.
+
+# Required by the Classifier task.
+# The development hardware utilised Titan Xp which is of Computer Capability 6.1.
+# Unfortunately, this hardware is getting obsolete and nearest suppport is provded
+# by CUDA 12.6. The version of torch is hardcoded to force PIP to look up the 
+# correct version of CUDA.
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.8.0+cu126
+torchvision==0.23.0+cu126
