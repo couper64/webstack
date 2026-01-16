@@ -166,13 +166,6 @@ services:
       celery -A main.worker worker
       --loglevel=info
       --concurrency=4
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     environment:
       MINIO_HOST_PREFIX : ${MINIO_HOST_PREFIX}
       MINIO_ENDPOINT    : ${MINIO_ENDPOINT}
