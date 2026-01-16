@@ -12,17 +12,15 @@ Create `hub/.env` with the following content.
     POSTGRES_USER=webservice
     POSTGRES_PASSWORD=password
 
+    MINIO_HOST_PREFIX=/
     MINIO_ENDPOINT=minio:9000
     MINIO_ROOT_USER=ROOTNAME
     MINIO_ROOT_PASSWORD=CHANGEME123
     MINIO_SECURE=false
     MINIO_BUCKET_NAME=webservice
 
-    PGADMIN_DEFAULT_EMAIL=admin@admin.com
-    PGADMIN_DEFAULT_PASSWORD=admin
-
     SUBJECT_CN=localhost
-    SUBJECT_ALT_NAME=DNS:localhost,IP:127.0.0.1
+    SUBJECT_ALT_NAME=DNS:localhost,IP:127.0.0.1,IP:192.168.0.30,DNS:kuil1.duckdns.org,IP:100.116.29.11
 
     GUAC_POSTGRESQL_DATABASE=guacamole_db
     GUAC_POSTGRESQL_PASSWORD='ChooseYourOwnPasswordHere1234'

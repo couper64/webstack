@@ -3,9 +3,7 @@ volumes:
   # Web-related volumes.
   postgres_data:
   minio_data:
-  pgadmin4_data:
-  ca_data:             # Stores root CA.
-  cert_openresty_data: # Stores server certificates.
+  mkdocs_data:
 
   # Guacamole-related volumes.
   guac_init_data:
@@ -13,160 +11,227 @@ volumes:
   guac_record:
   guac_data:
 
-services:
 
-  ### Webservice ###
+services:
 
   ca:
     image: alpine:latest
+    restart: on-failure     # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
     command: sh /generate_ca.sh
     volumes:
-      - ca_data:/ca
-      - ./proxy/generate_ca.sh:/generate_ca.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /ca/rootCA.crt"]
-      interval: 5s
-      retries: 10
-      start_period: 2s
-      timeout: 2s
+      - ./source/certificate_openssl/ssl/ca:/ca
+      - ./source/certificate_openssl/generate_ca.sh:/generate_ca.sh:ro
 
   cert_openresty:
-    image: alpine:latest
     depends_on:
-      ca:
-        condition: service_healthy
-    command: >
-      sh -c "
-        apk add --no-cache openssl &&
-        while [ ! -f /ca/rootCA.crt ]; do
-          echo 'Waiting for CA...';
-          sleep 1;
-        done &&
-        mkdir -p /cert &&
-        if [ ! -f /cert/openresty.crt ]; then
-          echo 'Generating server certificate...';
-          openssl genrsa -out /cert/openresty.key 2048 &&
-          openssl req -new -key /cert/openresty.key -out /cert/openresty.csr -subj '/CN=${SUBJECT_CN}' &&
-          printf 'subjectAltName=${SUBJECT_ALT_NAME},DNS:openresty1' > /tmp/san.cnf &&
-          openssl x509 -req -in /cert/openresty.csr -CA /ca/rootCA.crt -CAkey /ca/rootCA.key -CAcreateserial -out /cert/openresty.crt -days 1095 -sha256 -extfile /tmp/san.cnf &&
-          openssl x509 -in /cert/openresty.crt -text -noout | grep -A 1 'Subject Alternative Name'
-        else
-          echo 'Server cert already exists, skipping generation';
-        fi &&
-        echo 'Certificate is ready, keeping container alive for 10 seconds.' &&
-        sleep 10
-      "
+      - ca
+    image: alpine:latest
+    restart: on-failure     # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+    command: sh /generate_cert.sh
     volumes:
-      - ca_data:/ca
-      - cert_openresty_data:/cert
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /cert/openresty.crt"]
-      interval: 5s
-      retries: 10
-      start_period: 2s
-      timeout: 2s
+      - ./source/certificate_openssl/ssl/ca:/ca
+      - ./source/certificate_openssl/ssl/cert:/cert
+      - ./source/certificate_openssl/generate_cert.sh:/generate_cert.sh:ro
+    environment:
+      SUBJECT_CN       : ${SUBJECT_CN}
+      SUBJECT_ALT_NAME : ${SUBJECT_ALT_NAME}
+
+  openresty:
+    depends_on:
+      - cert_openresty
+      - adminer
+      - mkdocs
+    build:
+      context: source/proxy_openresty
+      dockerfile: Dockerfile.openresty
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+    ports:
+      - "9901:443"
+    volumes:
+      - ./source/proxy_openresty/lua:/etc/openresty/lua:ro
+      - ./source/proxy_openresty/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      # - ./source/proxy_openresty/favicon.ico:/usr/local/openresty/nginx/html/favicon.ico:ro
+      - ./source/certificate_openssl/ssl/ca:/etc/ssl/ca:ro     # rootCA.crt for trust
+      - ./source/certificate_openssl/ssl/cert:/etc/ssl/cert:ro # server cert + key
+      - mkdocs_data:/usr/local/openresty/nginx/html:ro # deploy mkdocs at the root.
+    environment:
+      POSTGRES_HOST     : ${POSTGRES_HOST}
+      POSTGRES_PORT     : ${POSTGRES_PORT}
+      POSTGRES_DB       : ${POSTGRES_DB}
+      POSTGRES_USER     : ${POSTGRES_USER}
+      POSTGRES_PASSWORD : ${POSTGRES_PASSWORD}
 
   postgres:
-    image: postgres
+    image: postgres:latest
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB       : ${POSTGRES_DB}
+      POSTGRES_USER     : ${POSTGRES_USER}
+      POSTGRES_PASSWORD : ${POSTGRES_PASSWORD}
     volumes:
-      - ./database/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - ./source/database_postgres/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+      - postgres_data:/var/lib/postgresql
 
   minio:
     image: quay.io/minio/minio
-    command: server /data --console-address ":9001"
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+    command: >
+      server /data
+      --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_BROWSER_REDIRECT_URL: http://localhost/minio/dashboard # Without it Minio doesn't know how to render itself under a subpath.
+      MINIO_ROOT_USER           : ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD       : ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9900/minio/dashboard/ # Without it Minio doesn't know how to render itself under a subpath.
     volumes:
       - minio_data:/data
-    restart: unless-stopped
 
   redis:
     image: redis
-    restart: unless-stopped
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
 
-  pgadmin4:
-    image: dpage/pgadmin4
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
-    volumes:
-      - pgadmin4_data:/var/lib/pgadmin
-    restart: unless-stopped
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
 
   fastapi:
-    build:
-      context: api
-      dockerfile: Dockerfile.fastapi
-    restart: unless-stopped
     depends_on:
       - postgres
       - redis
       - minio
+    build:
+      context: source/api_fastapi
+      dockerfile: Dockerfile.fastapi
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
     command: >
-      uvicorn api.main:api
+      uvicorn main:api
       --host 0.0.0.0
       --port 8000
       --proxy-headers
       --forwarded-allow-ips '*'
-      --root-path /api
+      --root-path /api/v1/
     environment:
-      MINIO_ENDPOINT   : ${MINIO_ENDPOINT}
-      MINIO_ACCESS_KEY : ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY : ${MINIO_ROOT_PASSWORD}
-      MINIO_SECURE     : ${MINIO_SECURE}
-      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
+      MINIO_HOST_PREFIX : ${MINIO_HOST_PREFIX}
+      MINIO_ENDPOINT    : ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY  : ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY  : ${MINIO_ROOT_PASSWORD}
+      MINIO_SECURE      : ${MINIO_SECURE}
+      MINIO_BUCKET_NAME : ${MINIO_BUCKET_NAME}
 
   celery:
-    build:
-      context: worker
-      dockerfile: Dockerfile.celery
-    restart: unless-stopped
     depends_on:
       - redis
       - postgres
       - minio
+    build:
+      context: source/worker_celery
+      dockerfile: Dockerfile.celery
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+    command: >
+      celery -A main.worker worker
+      --loglevel=info
+      --concurrency=4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      MINIO_HOST_PREFIX : ${MINIO_HOST_PREFIX}
+      MINIO_ENDPOINT    : ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY  : ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY  : ${MINIO_ROOT_PASSWORD}
+      MINIO_SECURE      : ${MINIO_SECURE}
+      MINIO_BUCKET_NAME : ${MINIO_BUCKET_NAME}
+
+  flower:
+    depends_on:
+      - redis
+      - celery
+    build:
+      context: source/ui_flower
+      dockerfile: Dockerfile.flower
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+    command: >
+      celery -A main
+      --broker=redis://redis:6379/0
+      flower
+      --port=5555
+      --persistent=True
+      --db=/tmp/flower
+      --max-tasks=1000
+      --auto-refresh=True
+    environment:
+      FLOWER_URL_PREFIX : flower
+      FLOWER_XHEADERS   : True
 
   streamlit:
     build:
-      context: webui
+      context: source/ui_streamlit
       dockerfile: Dockerfile.streamlit
-    environment:
-      PYTHONDONTWRITEBYTECODE: 1
-      PYTHONUNBUFFERED: 1
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
     command: >
-      streamlit run webui/app.py
+      streamlit run app.py
       --server.address=0.0.0.0
 
-  openresty:
-    depends_on:
-      cert_openresty:
-        condition: service_healthy
+  mkdocs:
     build:
-      context: proxy
-      dockerfile: Dockerfile.openresty
-    ports:
-      - "80:80"
-      - "443:443"
+      context: source/ui_mkdocs
+      dockerfile: Dockerfile.mkdocs
+    restart: on-failure     # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
     volumes:
-      - ./proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
-      - ./proxy/favicon.ico:/usr/local/openresty/nginx/html/favicon.ico:ro
-      - ./proxy/lua:/etc/openresty/lua:ro
-      - cert_openresty_data:/etc/ssl/cert # server cert + key
-      - ca_data:/etc/ssl/ca:ro             # rootCA.crt for trust
-    environment:
-      POSTGRES_HOST: ${POSTGRES_HOST}
-      POSTGRES_PORT: ${POSTGRES_PORT}
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      - mkdocs_data:/output
+    command: >
+      mkdocs build -d /output
 
   ### Guacamole ###
 
@@ -205,7 +270,7 @@ services:
     volumes:
     # Mount the generated init SQL so Postgres will execute it on first run
     - guac_init_data:/docker-entrypoint-initdb.d
-    - guac_data:/var/lib/postgresql/data:Z
+    - guac_data:/var/lib/postgresql:Z
 
     depends_on:
       guac_init:

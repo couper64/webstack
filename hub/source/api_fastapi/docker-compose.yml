@@ -1,0 +1,28 @@
+volumes:
+  minio_data:
+
+services:
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    ports:
+      - "8000:8000"
+    environment:
+      MINIO_ENDPOINT   : ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY : ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY : ${MINIO_ROOT_PASSWORD}
+      MINIO_SECURE     : ${MINIO_SECURE}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
+
+  minio:
+    image: quay.io/minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost/minio/dashboard # Without it Minio doesn't know how to render itself under a subpath.
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped

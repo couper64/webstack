@@ -67,11 +67,12 @@ ALTER TABLE ONLY public.forward ALTER COLUMN id SET DEFAULT nextval('public.forw
 --
 
 COPY public.forward (id, path, ip, port, postfix) FROM stdin;
-1	/api/	fastapi	8000	\N
+1	/api/v1/	fastapi	8000	\N
 3	/minio/api/	minio	9000	\N
 2	/streamlit/	streamlit	8501	\N
 4	/minio/dashboard/	minio	9001	\N
-5	/guacamole/	guacamole	8080	/guacamole
+5	/flower/	flower	5555	/flower
+6	/guacamole/	guacamole	8080	/guacamole
 \.
 
 

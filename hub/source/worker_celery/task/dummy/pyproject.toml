@@ -1,0 +1,21 @@
+[project]
+name = "dummy"
+version = "0.1.0"
+description = "My dummy package"
+authors = [
+  { name="Vladislav Li", email="couper64@gmail.com" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.32",
+]
+
+[project.urls]
+Homepage = "https://github.com/couper64/webstack"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+]

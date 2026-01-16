@@ -1,0 +1,8 @@
+FROM python:3.12-alpine
+
+RUN pip install mkdocs-material
+
+WORKDIR /source
+COPY . .
+
+# Build is handled by docker-compose command.

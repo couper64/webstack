@@ -1,0 +1,6 @@
+celery[redis]
+redis
+minio
+psycopg
+flower
+

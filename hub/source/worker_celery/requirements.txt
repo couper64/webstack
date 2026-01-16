@@ -1,0 +1,8 @@
+celery[redis]
+redis
+minio
+psycopg
+flower
+codecarbon
+
+# Add the dependency Python packages required by tasks below.
