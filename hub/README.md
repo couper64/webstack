@@ -1,6 +1,6 @@
 # Overview
 
-This file covers only the differences with the `template/README.md`. For the core documentation check `template/README.md`.
+This is Hub-related Docker Compose configuration. Noteworthy, the Celery worker of Hub doesn't use GPU/CUDA only CPU.
 
 ## Environment Variables
 
