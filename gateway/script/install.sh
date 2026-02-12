@@ -12,24 +12,23 @@ if [ -f "$ENV_FILE" ]; then
 else
     echo "Creating .env file..."
     cat > "$ENV_FILE" << EOF
+KEYCLOAK_ADMIN=admin
+KEYCLOAK_ADMIN_PASSWORD=admin
+
+SUBJECT_CN=localhost
+SUBJECT_ALT_NAME=DNS:localhost,IP:127.0.0.1
+
 POSTGRES_HOST=postgres
 POSTGRES_PORT=5432
 POSTGRES_DB=webservice
 POSTGRES_USER=webservice
 POSTGRES_PASSWORD=password
 
-MINIO_HOST_PREFIX=/
-MINIO_ENDPOINT=minio:9000
-MINIO_ROOT_USER=ROOTNAME
-MINIO_ROOT_PASSWORD=CHANGEME123
-MINIO_SECURE=false
-MINIO_BUCKET_NAME=webservice
-
-PGADMIN_DEFAULT_EMAIL=admin@admin.com
-PGADMIN_DEFAULT_PASSWORD=admin
-
-SUBJECT_CN=localhost
-SUBJECT_ALT_NAME=DNS:localhost,IP:127.0.0.1
+OIDC_CLIENT_ID=openresty-web-client
+OIDC_CLIENT_SECRET=miKfPlLt0vK02UiaB3wp8mGohYZJU9F2
+OIDC_ISSUER_PUBLIC=https://localhost:9990/iam/realms/myrealm
+OIDC_ISSUER_INTERNAL=http://keycloak:8080/iam/realms/myrealm
+OIDC_REDIRECT_URI=https://localhost:9990/redirect_uri
 EOF
 fi
 
