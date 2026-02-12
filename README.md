@@ -38,11 +38,13 @@ For the software to work, I had to assume a couple of things. Firstly, the softw
 - [x] Add support for Celery and Redis.
 - [x] Add support for Postgres and MinIO.
 - [x] Add support for Docker Compose.
-- [ ] Investigate if adding support for KeyCloak would benefit the project.
+- [x] Investigate if adding support for KeyCloak would benefit the project.
 - [ ] Investigate if adding support for Grafana/Prometheus would benefit the project.
-- [ ] Investigate if adding CodeCarbon to FastAPI would benefit the project. 
+- [x] Investigate if adding CodeCarbon to FastAPI would benefit the project. 
 - [x] Add support for Flower to monitor Celery.
-- [x] Make Lua scripts utilis environment variables instead of hardcoding values for username, password, database name, etc.
+- [x] Make Lua scripts utilise environment variables instead of hardcoding values for username, password, database name, etc.
+- [x] Add support for KeyCloak
+- [x] Add support for CodeCarbon.
 
 # Integration
 

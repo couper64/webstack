@@ -35,6 +35,11 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
     command: start
     environment:
 
