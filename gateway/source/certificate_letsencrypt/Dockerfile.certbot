@@ -1,0 +1,3 @@
+FROM certbot/certbot:latest
+# Install the DuckDNS plugin using pip
+RUN pip install --no-cache-dir certbot-dns-duckdns

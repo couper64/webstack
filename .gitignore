@@ -2,3 +2,5 @@
 *.drawio.bkp
 *.drawio.dtmp
 .env
+ssl/
+logs/

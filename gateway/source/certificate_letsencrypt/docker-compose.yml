@@ -1,0 +1,22 @@
+services:
+  certbot:
+    build:
+      context: .
+      dockerfile: Dockerfile.certbot
+    restart: unless-stopped # Restart Policy Cheat Sheet:
+                            # no               → Never restart. On exit (any reason), Docker does nothing.
+                            # always           → Always restart, even after manual `docker stop` or reboot.
+                            # unless-stopped   → Restart on crash or reboot, but NOT if manually stopped.
+                            # on-failure[:N]   → Restart only if exit code ≠ 0. Optional N = max retries.
+    dns:
+      - 8.8.8.8 # Encountered exception during recovery: certbot.errors.PluginError: The TXT value for domain "example.duckdns.org" could not be deleted.
+      - 1.1.1.1 # Request status code: 200
+                # Request response text: KO
+                # The resolution lifetime expired after 5.403 seconds: Server Do53:127.0.0.11@53 answered The DNS operation timed out.; Server Do53:127.0.0.11@53 answered The DNS operation timed out.; Server Do53:127.0.0.11@53 answered The DNS operation timed out.
+    volumes:
+      - ./ssl:/etc/letsencrypt
+      - ./logs:/var/log/letsencrypt
+    environment:
+      - DUCKDNS_TOKEN=<token>
+    # This command runs a renewal check every 12 hours
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
